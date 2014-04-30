@@ -369,7 +369,7 @@ limitations under the License.
 
             var me = this;
 
-            this.requestHandler.setConf({
+            me.requestHandler.setConf({
                 method: method,
                 path: path,
                 body: body
@@ -377,8 +377,8 @@ limitations under the License.
 
             d("[client] Requesting " + this.requestHandler.method + " " + this.requestHandler.path);
 
-            success && this.requestHandler.emitter.once('success', success);
-            error && this.requestHandler.emitter.once('error', error);
+            success && me.requestHandler.emitter.once('success', success);
+            error && me.requestHandler.emitter.once('error', error);
 
             this.connect()
                 .then(function() {

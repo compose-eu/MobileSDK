@@ -21,6 +21,9 @@
  *
  */
 "use strict";
+
+//module.exports = (function() { return this; }).apply(null);
+
 module.exports = {
     Error: Error,
     TypeError: TypeError,
@@ -31,5 +34,5 @@ module.exports = {
     Promise: null,
     postMessage: null,
     MessageChannel: null,
-    MutationObserver: null,
+    MutationObserver: null
 };

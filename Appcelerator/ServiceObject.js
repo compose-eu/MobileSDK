@@ -22,8 +22,9 @@ limitations under the License.
     var solib = {};
     solib.setup = function(compose) {
 
-        var ComposeError = compose.error.ComposeError;
         var Promise = compose.lib.Promise;
+        var ComposeError = compose.error.ComposeError;
+        var ValidationError = compose.error.ValidationError;
 
         var Subscription = function() {
 
@@ -81,13 +82,12 @@ limitations under the License.
             var me = this;
             return new Promise(function(resolve, reject) {
 
-                if(!subscription.id) {
+                if(!me.id) {
                     throw new ComposeError("Subscription must have an id");
                 }
 
                 var url = '/'+me.container().id+'/streams/'+ me.name +'/subscriptions/'+ me.id;
                 me.getClient().put(url, me.toJson(), function(data) {
-
                     resolve(data);
                 }, reject);
             });
@@ -151,9 +151,123 @@ limitations under the License.
 
         /**
          *
+         * @param {Array} data A list of values
+         * @returns {DataBag} An object containing the data
+         */
+        var DataBag = function(data) {
+            this.__$values = data && data.length ? data : [];
+            this.__$cursor = 0;
+        };
+
+        /**
+         * @returns {Array} A list of values
+         * */
+        DataBag.prototype.getValues = function() {
+
+//            if(!this.__$values) {
+//                var values = [];
+//                if(data && data.length) {
+//                    for(var i in data) {
+//                        values[i] = {};
+//                        for(var c in data[i]) {
+//                            values[i][c] = data[i][c]['current-value'];
+//                        }
+//                    }
+//                }
+//                this.__$values = values;
+//            }
+            return this.__$values;
+        };
+
+        /**
+         * @return {Number} The list items length
+         * */
+        DataBag.prototype.size = function() {
+            return this.getValues().length;
+        };
+
+        /**
+         * @return {Object} The next object in the iterator or false
+         * */
+        DataBag.prototype.next = function() {
+            var c = this.__$cursor;
+            this.__$cursor += (this.__$cursor === this.length) ? 0 : 1;
+            return this.at(c);
+        };
+
+        /**
+         * Reset the internal cursor
+         * */
+        DataBag.prototype.reset = function() {
+            this.__$cursor = 0;
+        };
+
+        /**
+         * Return an object at a specific index
+         * */
+        DataBag.prototype.at = function(i) {
+            return this.getValues()[this.__$cursor] ? this.getValues()[this.__$cursor] : false;
+        };
+
+        /**
+         * @return {Object} Return the first element in the list
+         * */
+        DataBag.prototype.first = function() {
+            return this.at(0);
+        };
+
+        /**
+         * @return {Object} Return the last element in the list
+         * */
+        DataBag.prototype.last = function() {
+            return this.at(this.getValues().length);
+        };
+
+        /**
+         * @param {Number} index Optional, index in the list
+         * @param {String} channel The channel name
+         * @param {mixed} defaultValue A default value if the requested channel is not available
+         *
+         * @returns {Object|mixed} A value set if index is provided, if channel is provided, its value
+         */
+        DataBag.prototype.get = function(index, channel, defaultValue) {
+
+            if(parseInt(arguments[0]) === NaN) {
+                channel = arguments[0];
+                return this.get((this.size()-1), channel, defaultValue);
+            }
+
+            defaultValue = (typeof defaultValue === 'undefined') ? null : defaultValue;
+
+            var list = this.getValues();
+            var data = list[index];
+            if(data) {
+
+                if(channel && typeof data.channels[channel] !== 'undefined') {
+                    return data.channels[channel]['current-value'];
+                }
+
+                // taint with a get function to easily retrieve a single value
+                data.get = function(_channel, _defaultValue) {
+                    _defaultValue = (typeof _defaultValue === 'undefined') ? null : _defaultValue;
+                    if(channel && typeof data.channels[_channel] !== 'undefined') {
+                        return data.channels[_channel]['current-value'];
+                    }
+                    return _defaultValue;
+                };
+
+                return data;
+            }
+
+            return defaultValue;
+        };
+
+        /**
+         *
          * A Stream object
          *
          * @constructor
+         * @param {Object} obj An object with the Stream properties
          * @augments WebObject.Stream
          */
         var Stream = function(obj) {
@@ -213,7 +327,7 @@ limitations under the License.
         };
 
         /**
-         * Store the data of the ServiceObject stream
+         * Send data to a ServiceObject stream
          *
          * @return {Promise} Promise callback with result
          */
@@ -246,7 +360,7 @@ limitations under the License.
 
 
         /**
-         * Retieve the description of the ServiceObject streams
+         * Retieve data from a ServiceObject stream
          *
          * @param {String} timeModifier  text, optional Possible values: lastUpdate, 1199192940 (time ago as timestamp)
          * @return {Promise} Promise callback with result
@@ -270,20 +384,322 @@ limitations under the License.
                         data = res.data;
                     }
 
-                    var dl = data.length;
-                    for(var i = 0; i < dl; i++) {
-                        // utility getter
-                        var d = data[i];
-                        d.get = function(channel, defaultValue) {
-                            defaultValue = (typeof defaultValue !== 'undefined') ? defaultValue : null;
-                            return d && d.channels[channel] ? d.channels[channel]['current-value'] : defaultValue;
-                        };
-                    }
-
-                    resolve && resolve(data);
+                    resolve && resolve(new DataBag(data), data);
 
                 }, reject);
             });
+        };
+
+        /**
+         * Search data of a ServiceObject stream
+         *
+         * @param {Object} options
+         * @return {Promise} Promise callback with result
+         */
+        Stream.prototype.search = function(options) {
+
+            var me = this;
+
+            return new Promise(function(resolve, reject) {
+
+                if(!me.container().id) {
+                    throw new ComposeError("Missing ServiceObject id.");
+                }
+
+                if(!options) {
+                    throw new ComposeError("No params provided for search");
+                }
+
+                var getFieldName = function(opts) {
+
+                    var hasField = (typeof opts.field !== 'undefined' && opts.field),
+                        hasChannel = (typeof opts.channel !== 'undefined'
+                                        && opts.channel && me.getChannel(opts.channel));
+
+                    if(!hasChannel && !hasField) {
+                        throw new ComposeError("At least a valid `channel` or `field` properties has to be provided for numeric search");
+                    }
+
+                    if(hasField) {
+                        return opts.field;
+                    }
+                    else if(hasChannel) {
+                        return "channels." + opts.channel + ".current-value";
+                    }
+                };
+
+                var hasProp = function(data, name) {
+                    return 'undefined' !== data[name];
+                };
+
+                var params = {};
+
+                /**
+                {
+                    "numericrange": true,
+                    "rangefrom": 13,
+                    "rangeto": 17,
+                    "numericrangefield": "channels.age.current-value",
+                }
+                */
+                var queryParams = options.numeric;
+                if(queryParams) {
+
+                    params.numericrange = true;
+                    params.numericrangefield = getFieldName(queryParams);
+
+                    var hasFrom = hasProp(queryParams, "from"),
+                        hasTo = hasProp(queryParams, "to");
+
+                    if(!hasFrom && !hasTo) {
+                        throw new ComposeError("At least one of `from` or `to` properties has to be provided for numeric range search");
+                    }
+
+                    if(hasFrom) {
+                        params.rangefrom = queryParams.from;
+                    }
+
+                    if(hasTo) {
+                        params.rangeto = queryParams.to;
+                    }
+
+                }
+
+                /**
+                {
+                    "timerange": true,
+                    "rangefrom": 1396859660,
+                }
+                */
+                var queryParams = options.time;
+                if(queryParams) {
+
+                    params.timerange = true;
+
+                    var hasFrom = hasProp(queryParams, "from"),
+                        hasTo = hasProp(queryParams, "to");
+
+                    if(!hasFrom && !hasTo) {
+                        throw new ComposeError("At least one of `from` or `to` properties has to be provided for time range search");
+                    }
+
+                    if(hasFrom) {
+                        params.rangefrom = queryParams.from;
+                    }
+
+                    if(hasTo) {
+                        params.rangeto = queryParams.to;
+                    }
+
+                }
+
+                /**
+                {
+                    "match": true,
+                    "matchfield": "channels.name.current-value",
+                    "matchstring": "Peter John",
+                }
+                */
+                var queryParams = options.match;
+                if(queryParams) {
+
+                    params.match = true;
+                    params.matchfield = getFieldName(queryParams);
+
+                    var hasString = hasProp(queryParams, "string");
+
+                    if(!hasString) {
+                        throw new ComposeError("A value for `string` property has to be provided for text based search");
+                    }
+
+                    params.string = queryParams.string;
+                }
+
+
+                var checkForLocationStream = function() {
+                    if(!me.container().getStream('location')) {
+                        throw new ComposeError("To use `distance` based search a `location` stream is required");
+                    }
+                };
+
+                /**
+                {
+                    "geoboundingbox": true,
+                    "geoboxupperleftlon": 15.43,
+                    "geoboxupperleftlat": 43.15,
+                    "geoboxbottomrightlat": 47.15,
+                    "geoboxbottomrightlon": 15.47
+                }
+                */
+                var queryParams = options.bbox;
+                if(queryParams) {
+
+                    checkForLocationStream();
+
+                    params.geoboundingbox = true;
+
+                    var hasBbox = false;
+                    if(queryParams.coords) {
+                        // [toplat, toplon, bottomlat, bottomlon]
+                        if(queryParams.coords instanceof Array && queryParams.coords.length === 4) {
+                            params.geoboxupperleftlat = queryParams.coords[0];
+                            params.geoboxupperleftlon = queryParams.coords[1];
+                            params.geoboxbottomrightlat = queryParams.coords[2];
+                            params.geoboxbottomrightlon = queryParams.coords[3];
+                            hasBbox = true;
+                        }
+                        //[{lat, lon}, {lat, lon}]
+                        if(queryParams.coords instanceof Array && queryParams.coords.length === 2) {
+                            params.geoboxupperleftlat = queryParams.coords[0].lat || queryParams.coords[0].latitude;
+                            params.geoboxupperleftlon = queryParams.coords[0].lon || queryParams.coords[0].longitude;
+                            params.geoboxbottomrightlat = queryParams.coords[1].lat || queryParams.coords[1].latitude;
+                            params.geoboxbottomrightlon = queryParams.coords[1].lon || queryParams.coords[1].longitude;
+                            hasBbox = true;
+                        }
+                    }
+
+                    if(!hasBbox) {
+                        throw new ComposeError("A value for `string` property has to be provided for text based search");
+                    }
+
+                }
+                else {
+
+                    if(options.bbox) {
+                        (console && console.warn) && console.warn("`bbox` and `distance` search are not compatible, `bbox` will be used");
+                    }
+
+                    /*
+                     {
+                        "geodistance": true,
+                        "geodistancevalue": 300,
+                        "pointlat": 43.15,
+                        "pointlon": 15.43,
+                        "geodistanceunit": "km"
+                    }
+                    */
+                    var queryParams = options.distance;
+                    if(queryParams) {
+
+                        checkForLocationStream();
+
+                        params.geodistance = true;
+
+                        if(queryParams.position) {
+                            var position = queryParams.position;
+                            var isArray = (position instanceof Array);
+                            queryParams.lat =  isArray ? position[0] : (position.latitude || position.lat);
+                            queryParams.lon = isArray ? position[1] : (position.longitude || position.lon);
+                        }
+
+                        var hasValue = hasProp(queryParams, "value"),
+                            hasLat = hasProp(queryParams, "lat") || hasProp(queryParams, "latitude"),
+                            hasLng = hasProp(queryParams, "lon") || hasProp(queryParams, "longitude")
+                            ;
+
+                        if(!hasLat || !hasLng || !hasValue) {
+                            throw new ComposeError("`latitude`, `longitude` and `value` properties must be provided for distance search");
+                        }
+
+                        params.geodistanceunit = queryParams.unit || "km";
+                        params.geodistancevalue = queryParams.value;
+                        params.pointlat = queryParams.lat || queryParams.latitude;
+                        params.pointlon = queryParams.lon || queryParams.longitude;
+
+                    }
+                }
+
+                var url = '/' + me.container().id + '/streams/' + me.name + '/search';
+                me.container().getClient().post(url, params, function(res) {
+
+                    var data = [];
+                    if(res && res.data) {
+                        data = res.data;
+                    }
+
+                    resolve && resolve(new DataBag(data), data);
+
+                }, reject);
+            });
+        };
+
+        /**
+         * Search data of a ServiceObject by distance from a point
+         *
+         * @param {Object} position An object representing a geo-position, eg `{ latitude: 123 , longitude: 321 }`
+         * @param {Number} distance The distance value
+         * @param {String} unit Optional unit, default to `km`
+         *
+         * @return {Promise} Promise callback with result
+         */
+        Stream.prototype.searchByDistance = function(position, distance, unit) {
+            return this.search({
+                distance: {
+                    position: position,
+                    value: distance,
+                    unit: unit
+                }
+            });
+        };
+
+        /**
+         * Search data of a ServiceObject in a Bounding Box
+         *
+         * @param {Array} bbox An array of 4 elements representing the bounding box, eg
+         *                      ```
+         *                      [
+         *                          upperLat, upperLng,
+         *                          bottomLat, bottomLng
+         *                      ]
+         *                      ```
+         *                or an Array with 2 elements each one as an object eg
+         *                      ```
+         *                      [
+         *                          { latitude: 123, longitude: 321 }, // upper
+         *                          { latitude: 321, longitude: 123 }  // bottom
+         *                      ]
+         *                      ```
+         *
+         * @return {Promise} Promise callback with result
+         */
+        Stream.prototype.searchByBoundingBox = function(bbox) {
+            return this.search({ bbox: { coords: bbox } });
+        };
+
+        /**
+         * Search text for a channel of a ServiceObject stream
+         *
+         * @param {String} channel The channel name where to search in
+         * @param {Number} string The string query to search for
+         *
+         * @return {Promise} Promise callback with result
+         */
+        Stream.prototype.searchByText = function(channel, string) {
+            return this.search({ distance: { string: string, channel: channel } });
+        };
+
+        /**
+         * Search data by the update time range of a ServiceObject stream
+         *
+         * @param {Object} params An object with at least one of `from` or `to` properties
+         *
+         * @return {Promise} Promise callback with result
+         */
+        Stream.prototype.searchByTime = function(params) {
+            return this.search({ time: params });
+        };
+
+        /**
+         * Search data by a numeric value of a ServiceObject stream
+         *
+         * @param {String} channel Channel name to search for
+         * @param {Object} params An object with at least one of `from` or `to` properties
+         *
+         * @return {Promise} Promise callback with result
+         */
+        Stream.prototype.searchByNumber = function(channel, params) {
+            params.channel = channel;
+            return this.search({ numeric: params });
         };
 
         /**
@@ -300,6 +716,15 @@ limitations under the License.
         compose.util.extend(StreamList, compose.lib.WebObject.StreamList);
 
         StreamList.prototype.validate = function(stream) {
+
+            if(!stream.name) {
+                throw new ValidationError("Stream must have a `name` properties");
+            }
+
+            if(!stream.description) {
+                throw new ValidationError("Stream must have a `description` properties");
+            }
+
             var streamObj = new Stream(stream);
             streamObj.container(this.container());
             return streamObj;
@@ -483,31 +908,45 @@ limitations under the License.
             }).bind(me);
         };
 
-    //    /**
-    //     * Update ServiceObject description
-    //     *
-    //     * @param {WebObject} wo A WebObject instance
-    //     * @param {Function} then Function to call after request is completed. eg. function(error, WebObject) {}
-    //     *
-    //     * @return {ServiceObject} Self reference
-    //     */
-    //    ServiceObject.prototype.update = function(then) {
-    //
-    //        var me = this;
-    //
-    //        if(!me.id) {
-    //            throw new Error("Missing ServiceObject id.");
-    //        }
-    //
-    //        return getPromise(function(resolve, error) {
-    //            me.getClient().put(['', me.id], me.toString(), function(data) {
-    //                if(data) {
-    //                    me.load(data);
-    //                }
-    //                resolve && resolve(data);
-    //            }, error);
-    //        });
-    //    };
+        /**
+         * Update a Service Object
+         *
+         * @return {Promise} Promise of the request with the so as argument
+         */
+        ServiceObject.prototype.update = function() {
+            var me = this;
+            return new Promise(function(resolve, error) {
+
+                if(!me.id) {
+                    throw new Error("Missing ServiceObject id.");
+                }
+
+                me.getClient().put('/'+ me.id, me.toString(), function(data) {
+                    resolve && resolve(me);
+                }, error);
+            });
+        };
+
+        /**
+         * Delete a Service Object
+         * @param {String} Optional, the soid to delete
+         *
+         * @return {Promise} Promise of the request with a new empty so as argument
+         */
+        ServiceObject.prototype.delete = function() {
+            var me = this;
+            return new Promise(function(resolve, error) {
+
+                if(!me.id) {
+                    throw new Error("Missing ServiceObject id.");
+                }
+
+                me.getClient().delete('/'+ me.id, null, function() {
+                    me.load({});
+                    resolve && resolve(me);
+                }, error);
+            });
+        };
 
 
         /**

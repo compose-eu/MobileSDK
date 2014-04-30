@@ -17,7 +17,9 @@ limitations under the License.
 
 (function() {
 
-    var client;
+    var client = null;
+    var reconnectTimes = 5;
+    var tries = reconnectTimes;
 
     var DEBUG = false;
     var d = function(m) { (DEBUG === true || (DEBUG > 19)) && console.log(m); };
@@ -50,6 +52,41 @@ limitations under the License.
         return o;
     };
 
+    var needConnection = function() {
+
+        if(client) {
+
+            d("WS state " + client.readyState);
+            switch(client.readyState) {
+                case 0:
+
+                    d("[ws client] WS is connecting");
+                    setTimeout(function() {
+                        wslib.connect(handler, connectionSuccess, connectionFail);
+                    }, 100);
+
+                    return false;
+
+                    break;
+                case 1:
+
+                    d("[ws client] WS is already connected");
+                    return false;
+
+                    break;
+                case 2:
+                case 3:
+
+                    d("[ws client] WS is closed or closing");
+                    client = null;
+
+                    break;
+            }
+        }
+
+        return true;
+    };
+
     var wslib = {};
     wslib.initialize = function(compose) {
 
@@ -73,27 +110,14 @@ limitations under the License.
 
         wslib.connect = function(handler, connectionSuccess, connectionFail) {
 
-            d("[ws client] Connection requested");
-
             // initialize the client, but only if not connected or reconnecting
             // 0 not yet connected
             // 1 connected
             // 2 closing
             // 3 closed
-//            if(client) console.warn("rs "+ client.readyState);
 
-            if(client && client >= 2) {
-                client = null;
-            }
 
-            if (!client || (client && client.readyState <= 1)) {
-
-                if(client && client.readyState === 0) {
-                    setTimeout(function() {
-                        wslib.connect(handler, connectionSuccess, connectionFail);
-                    }, 20);
-                    return;
-                }
+            if (needConnection()) {
 
                 d("[ws client] Connecting to ws server " +
                         wsConf.proto +'://'+ wsConf.host + ':' + wsConf.port + '/' + compose.config.apiKey);
@@ -106,14 +130,32 @@ limitations under the License.
                 };
 
                 client.onerror = function(e) {
+                    console.warn(e);
+                    // @TODO: test properly the reconnection beahvior!
+                    if(client) {
+
+                        if(client.readyState >= 2 && tries < reconnectTimes){
+                            d("[ws client] Connection lost, try reconnect");
+                            tries--;
+                            wslib.connect(handler, connectionSuccess, connectionFail);
+                            return;
+                        }
+
+                        if(client.readyState < 2) {
+                            d(e);
+                            handler.emitter.trigger("error", { message: "Websocket error", data: e })
+                            return;
+                        }
+                    }
 
                     d("[ws client] Connection error");
-                    d(e);
-
-                    connectionFail(e);
+                    tries = reconnectTimes;
+                    connectionFail(new Error("WebSocket connection error"));
                 };
 
                 client.onopen = function() {
+
+                    tries = reconnectTimes;
 
                     d("[ws client] Connected");
                     handler.emitter.trigger('connect', client);

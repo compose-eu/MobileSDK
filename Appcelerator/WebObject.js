@@ -20,7 +20,6 @@ limitations under the License.
     wolib.setup = function(compose) {
 
         var ComposeError = compose.error.ComposeError;
-
         var copyVal = compose.util.copyVal;
 
         if(!compose) {
@@ -39,6 +38,28 @@ limitations under the License.
             this.initialize(channels);
         };
         compose.util.extend(ChannelsList, compose.util.List.ObjectList);
+
+        ChannelsList.prototype.validate = function(channel) {
+
+//            if(!channel.name) {
+//                throw new ValidationError("Channel must have a `name` property");
+//            }
+//
+//            if(!channel.type) {
+//                throw new ValidationError("Channel must have a `type` property");
+//            }
+//
+//            if(!channel.unit) {
+//                throw new ValidationError("Channel must have a `unit` property");
+//            }
+//
+//            if(channel.type !== 'Number' || channel.type !== 'String' || channel.type !== 'Boolean' ) {
+//                throw new ValidationError("Channel `type` must be one of Number, String or Boolean");
+//            }
+
+            return channel;
+        };
+
 
         /**
          *
@@ -105,10 +126,11 @@ limitations under the License.
             return -1;
         };
 
-        // no validation till API isn't stable
         StreamList.prototype.validate = function(stream) {
+
             var streamObj = new Stream(stream);
             streamObj.container(this.container());
+
             return streamObj;
         };
 

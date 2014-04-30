@@ -48,11 +48,15 @@ limitations under the License.
     // custom errors
     compose.error = {};
 
-    var ComposeError = function(m) {
+    compose.error.ComposeError = function(m) {
         this.message = m;
     };
-    ComposeError.prototype = Object.create(Error.prototype);
-    compose.error.ComposeError = ComposeError;
+    compose.error.ComposeError.prototype = new Error;
+
+    compose.error.ValidationError = function(m) {
+        this.message = m;
+    };
+    compose.error.ValidationError.prototype = new compose.error.ComposeError;
 
     /**
      * Sniff the current enviroment
@@ -125,7 +129,7 @@ limitations under the License.
      *                  [platform-path]/[transport]/[enviroment]
      */
     compose.util.getAdapterPath = function() {
-        var path = compose.config.platformsPath + compose.config.transport
+        var path = compose.util.getPlatformPath() + compose.config.transport
                     + '/' + compose.config.platform;
         return path;
     };
@@ -324,7 +328,7 @@ limitations under the License.
 
 
         if(!compose) {
-            throw new ComposeError("compose.io module reference not provided, quitting..");
+            throw new compose.error.ComposeError("compose.io module reference not provided, quitting..");
         }
 
         compose.lib.Client = compose.util.setupModule("client");
@@ -384,10 +388,12 @@ limitations under the License.
                     "bluebird": "vendors/bluebird/browser/bluebird"
                 };
 
+                var isReady = false;
                 var onLoadCallback;
 
                 window.Compose.ready = function(cb) {
                     onLoadCallback = cb;
+                    if(isReady) cb();
                 };
 
                 var _d = [];
@@ -420,6 +426,7 @@ limitations under the License.
                         if(c === 0) {
                             // call on load!
                             onLoadCallback && onLoadCallback();
+                            isReady = true;
                         }
                     };
 

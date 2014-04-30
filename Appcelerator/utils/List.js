@@ -37,6 +37,8 @@ limitations under the License.
             }
         };
 
+
+
         ArrayList.prototype.__$list;
         ArrayList.prototype.__$container;
 

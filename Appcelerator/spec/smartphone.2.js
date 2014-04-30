@@ -16,6 +16,18 @@ exports.definition = {
                 }
             }
         },
+        "location": {
+            "description": "SO location",
+            "type": "sensor",
+            "channels": {
+                "phone_hash": {
+                    "type": "String"
+                },
+                "friend": {
+                    "type": "Boolean"
+                }
+            }
+        },
         "accelerometer": {
             "description": "Report accellerometer data of the smartphone",
             "type": "sensor",
@@ -79,9 +91,25 @@ exports.definition = {
                     "unit": "percentage"
                 }
             }
+        },
+        "testsuite": {
+            "description": "Utility stream for test purposes",
+            "type": "sensor",
+            "channels": {
+                "text": {
+                    "type": "String"
+                },
+                "location": {
+                    "type": "Array"
+                },
+                "number": {
+                    "type": "Number"
+                },
+            }
         }
     },
     "customFields": {
+        "testsuite": true,
         "hashnumber": "xxxxxyyyyyzzzzzzzzzz",
         "phone_details": {
             model: "some model",
