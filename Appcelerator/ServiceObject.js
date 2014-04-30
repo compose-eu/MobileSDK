@@ -27,12 +27,10 @@ limitations under the License.
         var ValidationError = compose.error.ValidationError;
 
         var Subscription = function() {
-
             if(this instanceof Subscription) {
                 var args = arguments[0] ? arguments[0] : {};
-                this.initialize(arguments);
+                this.initialize(args);
             }
-
         };
 
         Subscription.prototype.__$container;
@@ -46,6 +44,20 @@ limitations under the License.
             for(var i in object) {
                 this[i] = object[i];
             }
+        };
+
+        /*
+         *
+         * @param {boolean} asString Return as string if true, object otherwise
+         * @returns {Object|String}
+         */
+        Subscription.prototype.toJson = function(asString) {
+            var json = compose.util.copyVal(this);
+            return asString ? JSON.stringify(json) : json;
+        };
+
+        Subscription.prototype.toString = function() {
+            return this.toJson(true);
         };
 
         /**
@@ -86,7 +98,7 @@ limitations under the License.
                     throw new ComposeError("Subscription must have an id");
                 }
 
-                var url = '/'+me.container().id+'/streams/'+ me.name +'/subscriptions/'+ me.id;
+                var url = '/subscriptions/'+ me.id;
                 me.getClient().put(url, me.toJson(), function(data) {
                     resolve(data);
                 }, reject);
@@ -145,6 +157,152 @@ limitations under the License.
                 me.container().getClient().get(url, null, function(data) {
                     me.setSubscriptions(data.subscriptions);
                     resolve(data.subscriptions);
+                }, reject).bind(me.container());
+            });
+        };
+
+        /**
+         * @constructor
+         * */
+        var Actuation = function() {
+            if(this instanceof Actuation) {
+                var args = arguments[0] ? arguments[0] : {};
+                this.initialize(args);
+            }
+        };
+
+        Actuation.prototype.__$container;
+
+        Actuation.prototype.container = function(o) {
+            this.__$container = o || this.__$container;
+            return this.__$container;
+        };
+
+        Actuation.prototype.initialize = function(object) {
+            for(var i in object) {
+                this[i] = object[i];
+            }
+        };
+
+        /*
+         *
+         * @param {boolean} asString Return as string if true, object otherwise
+         * @returns {Object|String}
+         */
+        Actuation.prototype.toJson = function(asString) {
+            var json = compose.util.copyVal(this);
+            return asString ? JSON.stringify(json) : json;
+        };
+
+        Actuation.prototype.toString = function() {
+            return this.toJson(true);
+        };
+
+
+        /**
+         * Invoke the ServiceObject action
+         *
+         * @return {Promise} Promise callback with result
+         */
+        Actuation.prototype.invoke = function() {
+            var me = this;
+            return new Promise(function(resolve, reject) {
+
+                var url = '/'+ me.container().id + '/actuations/'+ me.name;
+                me.container().getClient().post(url, null, function(data) {
+
+                    me.id = data.id;
+                    me.createdAt = data.createdAt;
+
+                    resolve && resolve(me);
+                }, reject);
+            });
+        };
+
+        /**
+         * Reset the status of an actuation
+         * */
+        Actuation.prototype.reset = function() {
+            this.id = null;
+            this.createdAt = null;
+        };
+
+        /**
+         * Get the status of an actuation
+         *
+         * @return {Promise} Promise callback with result
+         */
+        Actuation.prototype.status = function() {
+            var me = this;
+            return new Promise(function(resolve, reject) {
+
+                if(!me.id) {
+                    throw new ComposeError("Actuation must have an id, have you invoked it first?");
+                }
+
+                var url = '/actuations/'+ me.id;
+                me.getClient().get(url, null, function(data) {
+                    if(data.status === 'completed') {
+                        me.reset();
+                    }
+                    resolve(data.status, data);
+                }, reject);
+            });
+        };
+
+        /**
+         * Cancel a launched actuation
+         *
+         * @return {Promise} Promise callback with result
+         */
+        Actuation.prototype.cancel = function() {
+            var me = this;
+            return new Promise(function(resolve, reject) {
+
+                if(!me.id) {
+                    throw new ComposeError("Actuation must have an id, have you invoked it first?");
+                }
+
+                var url = '/actuations/'+ me.id;
+                me.getClient().delete(url, null, function(data) {
+                    if(data.status === 'cancelled') {
+                        me.reset();
+                    }
+                    resolve(data.status, data);
+                }, reject);
+            });
+        };
+
+        /**
+         *
+         * List of Actuations
+         *
+         * @constructor
+         * @augments compose.util.List.ArrayList
+         */
+        var ActuationList = function() {
+            compose.util.List.ArrayList.apply(this, arguments);
+        };
+        compose.util.extend(ActuationList, compose.util.List.ArrayList);
+
+        ActuationList.prototype.validate = function(obj) {
+            var action = new Actuation(obj);
+            action.container(this.container());
+            return action;
+        };
+
+        /**
+         * Load all the ServiceObject actuations
+         *
+         * @return {Promise} Promise callback with result
+         */
+        ActuationList.prototype.refresh = function() {
+            var me = this;
+            return new Promise(function(resolve, reject) {
+                var url = '/'+me.container().id+'/actuations';
+                me.container().getClient().get(url, null, function(data) {
+                    me.container().setActions(data.actions);
+                    resolve(data.actions);
                 }, reject).bind(me.container());
             });
         };
@@ -778,6 +936,9 @@ limitations under the License.
         };
         compose.util.extend(ServiceObject, compose.WebObject);
 
+        ServiceObject.prototype.__$actions = null;
+        ServiceObject.prototype.__$subscriptions = null;
+
         ServiceObject.prototype.emitter = function() {
             return this.__$emitter;
         };
@@ -855,6 +1016,22 @@ limitations under the License.
             _streams.initialize(streams);
 
             this.__$streams = _streams;
+        };
+
+        /**
+         *
+         * @param {Object} actions
+         * @returns {ServuceObject} self reference
+         */
+        ServiceObject.prototype.setActions = function(actions) {
+
+            var _actions = this.getActions();
+            _actions = new ActuationList(actions);
+            _actions.container(this);
+
+            this.__$actions = _actions;
+
+            return this;
         };
 
         /**
