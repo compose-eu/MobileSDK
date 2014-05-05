@@ -20,7 +20,6 @@ limitations under the License.
     var mqttlib = {};
 
     mqttlib.initialize = function(compose) {
-
         throw new compose.error.ComposeError("Browser support for mqtt has not been implemented yet!");
     };
 

@@ -390,9 +390,8 @@ limitations under the License.
          */
         DataBag.prototype.get = function(index, channel, defaultValue) {
 
-            if(parseInt(arguments[0]) === NaN) {
-                channel = arguments[0];
-                return this.get((this.size()-1), channel, defaultValue);
+            if(arguments[0]*1 !== arguments[0]) {
+                return this.get((this.size()-1), arguments[0], arguments[1]);
             }
 
             defaultValue = (typeof defaultValue === 'undefined') ? null : defaultValue;
@@ -401,15 +400,16 @@ limitations under the License.
             var data = list[index];
             if(data) {
 
-                if(channel && typeof data.channels[channel] !== 'undefined') {
-                    return data.channels[channel]['current-value'];
+                var channels = data.channels;
+                if(channel && typeof channels[channel] !== 'undefined') {
+                    return channels[channel]['current-value'];
                 }
 
-                // taint with a get function to easily retrieve a single value
+                // add a get function to retrieve a single value without the full json path
                 data.get = function(_channel, _defaultValue) {
                     _defaultValue = (typeof _defaultValue === 'undefined') ? null : _defaultValue;
-                    if(channel && typeof data.channels[_channel] !== 'undefined') {
-                        return data.channels[_channel]['current-value'];
+                    if(channel && typeof channels[_channel] !== 'undefined') {
+                        return channels[_channel]['current-value'];
                     }
                     return _defaultValue;
                 };
@@ -944,7 +944,7 @@ limitations under the License.
         };
 
         ServiceObject.prototype.getClient = function() {
-            return new compose.lib.Client.Client(this.emitter());
+            return new compose.lib.Client.Client(this);
         };
 
         /*
@@ -961,6 +961,15 @@ limitations under the License.
             return this.createdAt || null;
         };
 
+        /*
+         * Destroy a ServiceObject instance, taking care to cleanout inner references
+         *
+         */
+        ServiceObject.prototype.destroy = function() {
+            this.emitter().off();
+            compose.client.receiver.bind(this);
+        };
+
         /**
          * Bind to an event
          *
@@ -969,6 +978,13 @@ limitations under the License.
          * @return {Stream} Self refrence to current stream
          */
         ServiceObject.prototype.on = function(event, callback) {
+
+            // for `data` event bind to the global dataReceiver
+            if(event === 'data') {
+                console.warn("Add event %s ", event);
+                compose.lib.Client.receiver.bind(this);
+            }
+
             this.emitter().on(event, callback);
             return this;
         };
@@ -1152,26 +1168,6 @@ limitations under the License.
             return so.load(id);
         };
 
-        /**
-         * Retrieve all the Service Objects from a given user (identified by the Authorization header).
-         *
-         * @return {ServiceObject} Self reference
-         */
-        solib.list = function() {
-
-            var emitter = new compose.lib.Client.Emitter;
-            var client = new compose.lib.Client.Client(emitter);
-
-            return new Promise(function(resolve, reject) {
-                client.get('/', null, function(data) {
-
-                    client = null;
-                    emitter = null;
-
-                    resolve(data);
-                }, reject);
-            }).bind(this);
-        };
 
         /**
          * Return a API client instance
@@ -1181,6 +1177,21 @@ limitations under the License.
          */
         solib.client = function() {
             return (new ServiceObject()).getClient();
+        };
+
+        /**
+         * Retrieve all the Service Objects from a given user (identified by the Authorization header).
+         *
+         * @return {ServiceObject} Self reference
+         */
+        solib.list = function() {
+            var client = solib.client();
+            return new Promise(function(resolve, reject) {
+                client.get('/', null, function(data) {
+                    client.ServiceObject = null;
+                    resolve(data);
+                }, reject);
+            }).bind(this);
         };
 
     };

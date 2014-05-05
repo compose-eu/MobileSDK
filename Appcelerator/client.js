@@ -67,140 +67,10 @@ limitations under the License.
           505: 'HTTP Version not supported'
         };
 
-        var QueueManager = function(timeout) {
 
-            // 5 seconds
-            var timeout = timeout || 5000;
-
-            // queue[ ttl ] = { created: xxx, callback: xxx }
-            var queue = {};
-            var queueSize = 0;
-            var timer;
-
-            var clearQueue = function() {
-                if(!timer && queueSize > 0) {
-                    d("[queue manager] timer started");
-                    timer = setInterval(function() {
-
-                        if(queueSize === 0) {
-                            d("[queue manager] timer cleared");
-                            clearInterval(timer);
-                            return;
-                        }
-
-                        for(var i in queue) {
-                            if((queue[i].created + timeout) > (new Date).getTime()) {
-                                d("[queue manager] Pruning " + i);
-                                queue[i].handler.emitter.trigger('error', { code: 408 });
-                                queueSize > 0 && queueSize--;
-                                delete queue[i];
-                            }
-                        }
-
-                    }, timeout);
-                }
-                return timer;
-            };
-
-            this.guid = guid;
-
-            this.add = function(obj) {
-
-                if(typeof obj === 'function') {
-                    obj = { created: (new Date).getTime(), handler: obj };
-                }
-
-                var uuid = this.guid();
-                queue[uuid] = obj;
-
-                queueSize++;
-                clearQueue();
-
-                d("[queue manager] Enqueued " + uuid);
-                return uuid;
-            };
-
-            this.get = function(uuid) {
-                clearQueue();
-                return queue[uuid] ? queue[uuid] : null;
-            };
-
-            this.remove = function(uuid) {
-                if(queue[uuid]) {
-                    delete queue[uuid];
-                    queueSize > 0 && queueSize--;
-                }
-                clearQueue();
-            };
-
-            this.clear = function() {
-                for(var i in queue) delete queue[i];
-                queueSize = 0;
-                clearInterval(timer);
-            };
-
-            this.isErrorResponse = function(body) {
-                return (body && body.status >= 400);
-            };
-
-            this.triggerAll = function(event) {
-                for(var i in queue) {
-                    var emitter = queue[i].emitter;
-                    var a = [];
-                    for(var i in arguments) a[i] = arguments[i];
-                    a.push(queue[i]);
-                    emitter.trigger.apply(emitter, a);
-                }
-            };
-
-            this.handleResponse = function(message) {
-
-                var response;
-                try {
-                    response = JSON.parse(message.data);
-                }
-                catch (e) {
-                    console.error("Error reading JSON response");
-                    console.error(e);
-                    response = null;
-                }
-
-                // uhu?!
-                if(!response) {
-                    console.log("[queue manager] Message is empty.. skipping");
-                    d(response);
-                    return;
-                }
-
-                var errorResponse = this.isErrorResponse(response.body);
-                if(response.messageId) {
-
-                    var handler = this.get(response.messageId);
-                    if(handler) {
-                        if(errorResponse) {
-                            handler.emitter.trigger('error', response.body);
-                        }
-                        else {
-                            handler.emitter.trigger('success', response.body);
-                        }
-
-                        d("[queue manager] Message found, id " + response.messageId);
-
-                        delete response.messageId;
-                        return true;
-                    }
-
-                }
-
-                d("[queue manager] Message not found, id " + ((response.messageId) ? response.messageId : '[not set]'));
-                this.triggerAll('data', response, message);
-
-                return false;
-            };
-
-        };
-
-
+        /**
+         * Minimal implementation of an event emitter
+         * */
         var Emitter = function() {
             this.callbacks = {};
         };
@@ -260,8 +130,263 @@ limitations under the License.
             }
         };
 
-        var RequestHandler = function(emitter) {
-            this.emitter = emitter;
+        /**
+         * DataReceiver allows to register ServiceObjects for notifications from QueueManager of incoming data
+         * not already handled
+         *
+         * @constructor
+         * */
+        var DataReceiver = function() {
+            this.registry = [];
+        };
+
+        /**
+         * Search for SO in list and return its index
+         *
+         * @argument {ServiceObject} so A ServiceObject instance
+         * @return {Number} The index in the list or -1 if not found
+         * */
+        DataReceiver.prototype.getIndex = function(so) {
+            var l = this.registry.length;
+            for(var i = 0; i < l; i++) {
+                if(this.registry[i] === so) {
+                    return i;
+                }
+            }
+            return -1;
+        };
+
+        /**
+         * Add SO to list
+         *
+         * */
+        DataReceiver.prototype.bind = function(so) {
+            if(this.getIndex(so) < 0) {
+                this.registry.push(so);
+            }
+        };
+
+        /**
+         * Remove SO from list
+         *
+         * */
+        DataReceiver.prototype.unbind = function(so) {
+            var i = this.getIndex(so);
+            if(i > -1) {
+                this.registry.splice(i,1);
+            }
+        };
+
+        /**
+         * Notify all ServiceObjects in the receiver of an event.
+         *
+         * @param {String} event The event to trigger
+         * @params {mixed} data for the event
+         *
+         * */
+        DataReceiver.prototype.notify = function(event) {
+            var l = this.registry.length;
+            for(var i = 0; i < l; i++) {
+                var emitter = this.registry[i].emitter();
+                emitter && emitter.trigger.apply(emitter, arguments);
+            }
+        };
+
+
+        /**
+         * QueueManager handles queue of pub/sub communications.
+         *
+         * @constructor
+         * */
+        var QueueManager = function() {
+
+            var me= this;
+
+            var __receiver = null;
+            // 5 seconds
+            var __timeout = 5000;
+
+
+            // queue[ uuid ] = { created: xxx, callback: xxx }
+            var queue = {};
+            var queueSize = 0;
+            var timer;
+
+            /**
+             * Setter/Getter for dataReceiver
+             *
+             * */
+            this.receiver = function(_r) {
+                if(_r) __receiver = _r;
+                return __receiver;
+            };
+
+            /**
+             * Setter/Getter for timeout
+             *
+             * */
+            this.timeout = function(_t) {
+                if(_t) __timeout = _t;
+                return __timeout;
+            };
+
+            var clearQueue = function() {
+                if(!timer && queueSize > 0) {
+                    d("[queue manager] timer started");
+                    timer = setInterval(function() {
+
+                        if(queueSize === 0) {
+                            d("[queue manager] timer cleared");
+                            clearInterval(timer);
+                            timer = null;
+                            return;
+                        }
+
+                        for(var i in queue) {
+                            if(!queue[i].keep && (queue[i].created + me.timeout()) < (new Date).getTime()) {
+                                d("[queue manager] Pruning " + i);
+                                queue[i].handler.emitter.trigger('error', { code: 408 });
+                                if(queueSize > 0) {
+                                    queueSize--;
+                                }
+                                delete queue[i];
+                            }
+                        }
+
+                    }, me.timeout());
+                }
+
+                return timer;
+            };
+
+            this.guid = guid;
+
+
+            this.add = function(obj) {
+
+                var qItem;
+                var _now = (new Date).getTime();
+
+                if(!obj.handler) {
+                    qItem = {
+                        created: _now, // creation time
+                        handler: obj, // the request handler
+                        keep: false // keep forever (eg. for on('data') callbacks)
+                    };
+                }
+                else {
+                    qItem = obj;
+                    qItem.created = qItem.created || _now;
+                    qItem.keep = (typeof qItem.keep !== 'undefined') ? qItem.keep : false;
+                }
+
+                var uuid = this.guid();
+                queue[uuid] = qItem;
+
+                queueSize++;
+                clearQueue();
+
+                d("[queue manager] Enqueued " + uuid);
+                return uuid;
+            };
+
+            this.get = function(uuid) {
+                clearQueue();
+                return queue[uuid] ? queue[uuid].handler : null;
+            };
+
+            this.remove = function(uuid) {
+                if(queue[uuid]) {
+                    delete queue[uuid];
+                    if(queueSize > 0) queueSize--;
+                }
+                clearQueue();
+            };
+
+            this.clear = function() {
+                for(var i in queue) delete queue[i];
+                queueSize = 0;
+                clearInterval(timer);
+                timer = null;
+            };
+
+            this.isErrorResponse = function(body) {
+                return (body && body.status >= 400);
+            };
+
+            this.triggerAll = function() {
+                for(var i in queue) {
+                    var emitter = queue[i].emitter;
+                    var a = [];
+                    for(var i in arguments) a[i] = arguments[i];
+                    a.push(queue[i]);
+                    emitter.trigger.apply(emitter, a);
+                }
+            };
+
+            this.handleResponse = function(message, originalHandler) {
+
+                var response;
+                try {
+                    response = JSON.parse(message.data);
+                }
+                catch (e) {
+                    console.error("Error reading JSON response");
+                    console.error(e);
+                    response = null;
+                }
+
+                // uhu?!
+                if(!response) {
+                    console.log("[queue manager] Message is empty.. skipping");
+                    d(response);
+                    return;
+                }
+
+                var errorResponse = this.isErrorResponse(response.body);
+                if(response.messageId) {
+
+                    var handler = this.get(response.messageId);
+                    if(handler) {
+
+                        if(errorResponse) {
+                            handler.emitter.trigger('error', response.body);
+                        }
+                        else {
+                            handler.emitter.trigger('success', response.body);
+                        }
+
+                        d("[queue manager] Message found, id " + response.messageId);
+                        delete response.messageId;
+
+                        return true;
+                    }
+
+                }
+
+                d("[queue manager] Message not found, id " + ((response.messageId) ? response.messageId : '[not set]'));
+//                this.triggerAll('data', response, message);
+                this.receiver() && this.receiver().notify('data', response, message);
+
+                return false;
+            };
+
+        };
+
+        var RequestHandler = function() {
+            this.emitter = null;
+        };
+
+        /**
+         * Set the Client container instance
+         *
+         * */
+        RequestHandler.prototype.container = function(_c) {
+            if(_c) {
+                this.__$container = _c;
+                this.emitter = _c.ServiceObject.emitter();
+            }
+            return this.__$container;
         };
 
         RequestHandler.prototype.setConf = function(conf) {
@@ -323,15 +448,19 @@ limitations under the License.
             return data;
         };
 
+
+        var dataReceiver = new DataReceiver();
+
+        var queueManager = new QueueManager();
+        queueManager.receiver(dataReceiver);
+
         /**
          * The base library client interface
          *
          * @constructor
+         * @argument {ServiceObject} so The ServiceObject instance to bind the client
          */
-
-        var queueManager = new QueueManager();
-
-        var Client = function(emitter) {
+        var Client = function(so) {
 
             var adapter;
             this.adapter = function() {
@@ -341,9 +470,12 @@ limitations under the License.
                 return adapter;
             };
 
+            this.ServiceObject = so;
             this.queue = queueManager;
 
-            this.requestHandler = new RequestHandler(emitter);
+            this.requestHandler = new RequestHandler();
+            this.requestHandler.container(this);
+
             this.initialize();
         };
 
@@ -407,9 +539,13 @@ limitations under the License.
             return this.request('delete', path, data, success, error);
         };
 
+        client.queue = queueManager;
+        client.receiver = dataReceiver;
+
         client.Client = Client;
         client.RequestHandler = RequestHandler;
         client.Emitter = Emitter;
+        client.QueueManager = QueueManager;
 
     };
 

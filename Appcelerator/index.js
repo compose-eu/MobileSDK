@@ -182,7 +182,7 @@ limitations under the License.
 
     var setPaths = function() {
         if(compose.config.platform === 'titanium') {
-            config.platformsPath = compose.util.getModulePath() + config.platformsPath;
+            config.platformsPath = config.platformsPath;
         }
     };
 
