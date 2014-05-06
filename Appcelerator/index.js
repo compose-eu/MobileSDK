@@ -49,7 +49,17 @@ limitations under the License.
     compose.error = {};
 
     compose.error.ComposeError = function(m) {
-        this.message = m;
+
+        if(typeof m === "string") {
+            this.message = m;
+        }
+        
+        if(m instanceof Error) {
+            this.message = m.message;
+            this.stack = m.stack;
+            this.code = m.code;
+            this.errno = m.errno;
+        }
     };
     compose.error.ComposeError.prototype = new Error;
 

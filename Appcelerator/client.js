@@ -203,7 +203,7 @@ limitations under the License.
             var me= this;
 
             var __receiver = null;
-            // 5 seconds
+            // 15 seconds
             var __timeout = 5000;
 
 
@@ -231,6 +231,7 @@ limitations under the License.
             };
 
             var clearQueue = function() {
+
                 if(!timer && queueSize > 0) {
                     d("[queue manager] timer started");
                     timer = setInterval(function() {
@@ -253,7 +254,8 @@ limitations under the License.
                             }
                         }
 
-                    }, me.timeout());
+                    }, 250);
+
                 }
 
                 return timer;
@@ -324,16 +326,23 @@ limitations under the License.
                 }
             };
 
-            this.handleResponse = function(message, originalHandler) {
+            this.handleResponse = function(message, raw) {
 
                 var response;
-                try {
-                    response = JSON.parse(message.data);
+
+                if(typeof message === 'object') {
+                    response = message;
                 }
-                catch (e) {
-                    console.error("Error reading JSON response");
-                    console.error(e);
-                    response = null;
+
+                if(typeof message === 'string') {
+                    try {
+                        response = JSON.parse(message);
+                    }
+                    catch (e) {
+                        console.error("Error reading JSON response");
+                        console.error(e);
+                        response = null;
+                    }
                 }
 
                 // uhu?!
@@ -539,8 +548,8 @@ limitations under the License.
             return this.request('delete', path, data, success, error);
         };
 
-        client.queue = queueManager;
-        client.receiver = dataReceiver;
+        compose.util.queue = queueManager;
+        compose.util.receiver = dataReceiver;
 
         client.Client = Client;
         client.RequestHandler = RequestHandler;

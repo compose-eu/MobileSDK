@@ -162,7 +162,7 @@ limitations under the License.
 
                     client.onmessage = function(message, flags) {
                         d("[ws client] New message received");
-                        queue.handleResponse(message);
+                        queue.handleResponse(message.data, message);
                     };
 
                     // return promise

@@ -313,27 +313,14 @@ limitations under the License.
          * @returns {DataBag} An object containing the data
          */
         var DataBag = function(data) {
-            this.__$values = data && data.length ? data : [];
-            this.__$cursor = 0;
+            this.__$values = (data && data.length) ? data : [];
+            this.__$cursor = null;
         };
 
         /**
          * @returns {Array} A list of values
          * */
         DataBag.prototype.getValues = function() {
-
-//            if(!this.__$values) {
-//                var values = [];
-//                if(data && data.length) {
-//                    for(var i in data) {
-//                        values[i] = {};
-//                        for(var c in data[i]) {
-//                            values[i][c] = data[i][c]['current-value'];
-//                        }
-//                    }
-//                }
-//                this.__$values = values;
-//            }
             return this.__$values;
         };
 
@@ -345,12 +332,50 @@ limitations under the License.
         };
 
         /**
-         * @return {Object} The next object in the iterator or false
+         * @return {Number} The current cursor
+         * */
+        DataBag.prototype.getCursor = function() {
+            if(this.__$cursor === null) this.reset();
+            return this.__$cursor;
+        };
+
+
+        /**
+         * Move foward the internal cursor to the next item
+         *
+         * @return {Boolean} A value indicating if the operation is possible. False means end of list
+         *
          * */
         DataBag.prototype.next = function() {
-            var c = this.__$cursor;
-            this.__$cursor += (this.__$cursor === this.length) ? 0 : 1;
-            return this.at(c);
+
+            if((this.getCursor()+1) >= this.size())
+                return false;
+
+            this.__$cursor++;
+            return true;
+        };
+
+        /**
+         * Move backward the internal cursor to the previous item
+         *
+         * @return {Boolean} A value indicating if the operation is possible.
+         *                   False means begin of list has been already reached
+         *
+         * */
+        DataBag.prototype.prev = function() {
+
+            if((this.getCursor() - 1) < 0)
+                return false;
+
+            this.__$cursor--;
+            return true;
+        };
+
+        /**
+         * @return {Object} The current object in the iterator
+         * */
+        DataBag.prototype.current = function() {
+            return this.at(this.getCursor());
         };
 
         /**
@@ -363,8 +388,8 @@ limitations under the License.
         /**
          * Return an object at a specific index
          * */
-        DataBag.prototype.at = function(i) {
-            return this.getValues()[this.__$cursor] ? this.getValues()[this.__$cursor] : false;
+        DataBag.prototype.at = function(i, channel, defaultValue) {
+            return this.get(i, channel, defaultValue);
         };
 
         /**
@@ -382,6 +407,8 @@ limitations under the License.
         };
 
         /**
+         * Return an object in the list. If index is not provided, the current cursor position will be used
+         *
          * @param {Number} index Optional, index in the list
          * @param {String} channel The channel name
          * @param {mixed} defaultValue A default value if the requested channel is not available
@@ -391,7 +418,7 @@ limitations under the License.
         DataBag.prototype.get = function(index, channel, defaultValue) {
 
             if(arguments[0]*1 !== arguments[0]) {
-                return this.get((this.size()-1), arguments[0], arguments[1]);
+                return this.get(this.getCursor(), arguments[0], arguments[1]);
             }
 
             defaultValue = (typeof defaultValue === 'undefined') ? null : defaultValue;
@@ -407,17 +434,19 @@ limitations under the License.
 
                 // add a get function to retrieve a single value without the full json path
                 data.get = function(_channel, _defaultValue) {
+
                     _defaultValue = (typeof _defaultValue === 'undefined') ? null : _defaultValue;
-                    if(channel && typeof channels[_channel] !== 'undefined') {
-                        return channels[_channel]['current-value'];
+
+                    if(_channel && data.channels[_channel] && typeof data.channels[_channel] !== 'undefined') {
+                        return data.channels[_channel]['current-value'];
                     }
+
                     return _defaultValue;
                 };
-
                 return data;
             }
 
-            return defaultValue;
+            return null;
         };
 
         /**
@@ -981,8 +1010,7 @@ limitations under the License.
 
             // for `data` event bind to the global dataReceiver
             if(event === 'data') {
-                console.warn("Add event %s ", event);
-                compose.lib.Client.receiver.bind(this);
+                compose.util.receiver.bind(this);
             }
 
             this.emitter().on(event, callback);
@@ -997,6 +1025,12 @@ limitations under the License.
          * @return {Stream} Self refrence to current stream
          */
         ServiceObject.prototype.once = function(event, callback) {
+
+            // for `data` event bind to the global dataReceiver
+            if(event === 'data') {
+                compose.util.receiver.bind(this);
+            }
+
             this.emitter().once(event, callback);
             return this;
         };
@@ -1009,6 +1043,12 @@ limitations under the License.
          * @return {Stream} Self refrence to current stream
          */
         ServiceObject.prototype.off = function(event, callback) {
+
+            // for `data` event bind to the global dataReceiver
+            if(event === 'data') {
+                compose.util.receiver.unbind(this);
+            }
+
             this.emitter().off(event, callback);
             return this;
         };
@@ -1091,7 +1131,6 @@ limitations under the License.
                 if(!me.id) {
                     throw new ComposeError("Missing ServiceObject id.");
                 }
-
                 me.getClient().get('/'+me.id, null, function(data) {
                     if(data) {
                         me.initialize(data);
