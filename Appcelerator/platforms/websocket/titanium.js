@@ -81,7 +81,8 @@ adapter.initialize = function(compose) {
                 client.addEventListener('message', function(message, flags) {
 
                     d("[ti.ws client] New message received");
-                    queue.handleResponse(message);
+//                    console.log(message.data);
+                    queue.handleResponse(message.data, message);
 
                 });
 

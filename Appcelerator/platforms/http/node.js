@@ -46,7 +46,7 @@ adapter.initialize = function(compose) {
 
         params.method = handler.method;
 
-        if(DEBUG){
+        if(DEBUG) {
             d("[node client] Preparing request");
             d('Params:');
             d(JSON.stringify(params));
@@ -62,12 +62,12 @@ adapter.initialize = function(compose) {
             res.on('end', function() {
                 d("[node client] Completed request, status code " + res.statusCode);
                 if(res.statusCode >= 400) {
-                    handler.trigger('error', data ? data : {
+                    handler.emitter.trigger('error', data ? data : {
                         code: res.statusCode
                     });
                 }
                 else {
-                    handler.trigger('success', data);
+                    handler.emitter.trigger('success', data);
                 }
             });
 
@@ -75,7 +75,7 @@ adapter.initialize = function(compose) {
 
         req.on('error', function(e) {
             d("[node client] Request error");
-            handler.trigger('error', e);
+            handler.emitter.trigger('error', e);
         });
 
         if(handler.body) {

@@ -37,7 +37,7 @@ limitations under the License.
             var filepath = basePath + compose.util.getDefinitionsPath() + filename + ".json";
 
             var data = readf(filepath);
-            Ti.API.log(JSON.stringify(data));
+//            Ti.API.log(JSON.stringify(data));
             if(data) {
                 success(data);
                 return;

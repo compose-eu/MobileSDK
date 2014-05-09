@@ -22,6 +22,7 @@ var DEBUG = false;
 var d = function(m) {
     DEBUG && console.log(m);
 };
+
 var WebSocket = require('ws');
 var parseUrl = require("url").parse;
 
@@ -31,23 +32,20 @@ var adapter = module.exports;
 adapter.initialize = function(compose) {
 
     DEBUG = compose.config.debug;
-
     var queue = this.queue;
 
-    var host;
-    if (compose.config.url) {
+    compose.config.websocket = compose.config.websocket || {};
+
+    var host = compose.config.websocket.host;
+    if (!host && compose.config.url) {
         var urlinfo = parseUrl(compose.config.url);
         host = urlinfo.hostname;
     }
 
-    compose.config.websocket = compose.config.websocket || {};
     var wsConf = {
         proto: compose.config.websocket.secure ? 'wss' : 'ws',
-//        host: host || "api.servioticy.com",
-        host: "192.168.9.218",
-        port: compose.config.websocket.port || "8081",
-//        user: compose.config.websocket.user || "compose",
-//        password: compose.config.websocket.password || "shines"
+        host: host || "api.servioticy.com",
+        port: compose.config.websocket.port || "8081"
     };
 
     var request = {
@@ -57,12 +55,55 @@ adapter.initialize = function(compose) {
         body: {}
     };
 
+
     adapter.connect = function(handler, connectionSuccess, connectionFail) {
 
         d("Connection requested");
 
+        var needConnection = function() {
+
+            if(client) {
+
+    //            d("[ws client] WS state " + client.readyState);
+                switch(client.readyState) {
+                    case client.CONNECTING:
+
+                        d("[ws client] WS is connecting");
+                        setTimeout(function() {
+                            adapter.connect(handler, connectionSuccess, connectionFail);
+                        }, 100);
+
+                        return null;
+
+                        break;
+                    case client.OPEN:
+
+                        d("[ws client] WS is already connected");
+                        return false;
+
+                        break;
+                    case client.CLOSING:
+                    case client.CLOSED:
+
+                        d("[ws client] WS is closed or closing");
+                        client = null;
+
+                        break;
+                }
+            }
+
+            return true;
+        };
+
         // initialize the client, but only if not connected or reconnecting
-        if (!client || (client && !client.connected && (!client.disconnecting && !client.reconnectTimer))) {
+        var needConn = needConnection();
+
+        if(needConn === null) { // connecting, wait
+            return;
+        }
+
+        if (needConn) {
+
 
             d("[ws client] Connecting to ws server " +
                     wsConf.proto +'://'+ wsConf.host + ':' + wsConf.port + '/' + compose.config.apiKey);
@@ -88,7 +129,6 @@ adapter.initialize = function(compose) {
                 handler.emitter.trigger('connect', client);
 
                 client.on('message', function(message, flags) {
-
                     d("[ws client] New message received");
                     queue.handleResponse(message);
 
@@ -114,9 +154,9 @@ adapter.initialize = function(compose) {
      */
     adapter.request = function(handler) {
 
+
         request.meta.method = handler.method;
-        var urlinfo = parseUrl(compose.config.url);
-        request.meta.url = urlinfo.path;
+        request.meta.url = handler.path;
 
         if (handler.body) {
             var body = handler.body;

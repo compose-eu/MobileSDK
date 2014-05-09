@@ -31,7 +31,7 @@ compose.setup({
   }
 });
 
-    
+
 // Load by ServiceObject Id
 compose.load("ServiceObject Id").then(function(so) {
 
@@ -78,7 +78,7 @@ compose.create({
 
 })
 
-// Read a definition, eg smartphone.json from definitions/ folder 
+// Read a definition, eg smartphone.json from definitions/ folder
 compose.read("smartphone")
     .then(function(smartphoneDefinition) {
         // this is the json-based SO representation
@@ -215,6 +215,44 @@ API docs needs review. Can be generated using `jsdoc` and will be added to the r
 `npm install -g jsdoc`
 
 `jsdoc ./`
+
+Creating Compose compatible JSON objects
+
+```javascript
+
+
+var object = new compose.WebObject({
+    name: "Some base structure"
+});
+
+object.description = "Some info"
+object.customFields.some = "thing"
+
+object.addStream("battery", {
+    description: "Report the battery level of the phone",
+    type: "sensor"
+}).addChannel({
+        level: {
+            unit: "percentage",
+            type: "numeric"
+        }
+    });
+
+
+// get json as string
+console.log("My object is " + object.toString());
+//get json, as object
+console.log("My object is ", object);
+
+// create it
+compose.create(object).then(function(serviceObject) {
+
+    console.log("Service object created!", serviceObject.id);
+
+});
+
+```
+
 
 License
 --

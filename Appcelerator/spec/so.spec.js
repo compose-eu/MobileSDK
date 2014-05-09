@@ -3,9 +3,12 @@ describe('ServiceObject', function() {
 
     var compose = require("../index").setup({
 //        debug: true,
-        apiKey: "ODc1Nzc3ZTgtMGMxZS00YTYxLTg3ZjItMzJmOTY0YTJlYjdkNzg0NWMwNzYtNTVkYy00NzkwLThhZTItNDI2NTM1MzJjNzUx",
+//        apiKey: "NTEzOGQ1OGYtYjc2Ni00M2MxLTllZDEtYzAyNmQyM2E2YWU2Yzk0ZDYyNzItZGQ3MS00YzQwLWJlYjUtZDM4ZTkyNjEwYTU2",
+        apiKey: "M2UxYTFmNzQtZDZhYi00ZTNiLWEzZWUtYzdjMTU1MzJhMDE1ZTdlYWRiYzQtMmU2ZS00YTk5LTgyNGQtZDU3YzkzOWQwYzQw",
+        url: "http://192.168.9.243:8080",
         transport: 'http'
     });
+
 
     var smartphone = null;
     var smartphoneDefinition = require('./smartphone.2').definition;
@@ -49,18 +52,16 @@ describe('ServiceObject', function() {
             .catch(function(e) { catchError(e); done(); });
     });
 
-//    it('Update SO [not implemented yet in backend]', function(done) {
-//        smartphone.getStream('location').addChannel("test", "numeric", "time");
-//        smartphone.update()
-//            .then(function(so) {
-//                expect(so.getStreams().size()).toEqual(smartphone.getStreams().size());
-//                done();
-//            })
-//            .catch(function() {
-//                expect(error.code).toEqual(405);
-//                done();
-//            });
-//    });
+    it('Update SO custom fields', function(done) {
+        var time = new Date().getTime();
+        smartphone.customFields.newTestField = time;
+        smartphone.update()
+            .then(function(so) {
+                expect(smartphone.customFields.newTestField).toEqual(time);
+                done();
+            })
+            .catch(function(e) { catchError(e); done(); });
+    });
 
     it('Push and pull stream data', function(done) {
 
@@ -81,14 +82,14 @@ describe('ServiceObject', function() {
                 setTimeout(function() {
 
                     stream.pull('lastUpdate')
-                        .then(function(data) {
+                        .then(function(data, raw) {
 
-                            var record = data[data.length-1];
+                            var record = data.last();
 
                             expect(record.lastUpdate)
                                         .toEqual(pushData.lastUpdate);
 
-                            expect(record.channels.latitude['current-value'])
+                            expect(record.get("latitude"))
                                         .toEqual(pushData.channels.latitude['current-value']);
 
                             done();
@@ -100,6 +101,54 @@ describe('ServiceObject', function() {
             })
             .catch(function(e) { catchError(e); done(); });
 
+    });
+
+    it('Search by text', function(done) {
+
+        var teststream = smartphone.getStream('testsuite');
+
+        var __then = function() {
+            teststream.searchByText("text", "Lorem")
+                .then(function(data) {
+
+                    console.log(data);
+                    expect(so.id).toEqual(null);
+                    done();
+                })
+                .catch(function(e) { catchError(e); done(); });
+        };
+
+        teststream.push({
+            text: "ipsum eidam Lorem ",
+            location: [46.123, 12.321],
+            number: Math.round()
+        }).then(function(){
+
+            teststream.push({
+                text: "ipsum eidam",
+                location: [55.123, 33.321],
+                number: -1
+            }).then(function(){
+
+                teststream.push({
+                    text: "Lorem ipsum eidam dolet",
+                    location: [45.123, 11.321],
+                    number: Math.round()
+                }).then(function() {
+                    __then();
+                });
+
+            });
+        });
+    });
+
+    it('Delete SO', function(done) {
+        smartphone.delete()
+            .then(function(so) {
+                expect(so.id).toEqual(null);
+                done();
+            })
+            .catch(function(e) { catchError(e); done(); });
     });
 
 });

@@ -18,5 +18,5 @@ limitations under the License.
 
 var adapter = module.exports;
 adapter.initialize = function(compose) {
-    throw new compose.error.ComposeError("Not implemented yet.");
+    throw new compose.error.ComposeError("Titanium support has not been implemented yet.");
 };

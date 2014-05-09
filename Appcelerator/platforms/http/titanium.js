@@ -16,7 +16,7 @@ limitations under the License.
 ******************************************************************************/
 
 var DEBUG = false;
-//DEBUG = true;
+DEBUG = true;
 var d = function(m) { DEBUG && console.log(m); };
 
 var adapter = module.exports;
@@ -45,20 +45,28 @@ adapter.initialize = function(compose) {
 
             d("[titanium client] Response received " + status);
 
+            try {
+                data = JSON.parse(data);
+            }
+            catch (e) {
+                status = 500;
+                data = {
+                    message: "Response from server is not readable"
+                };
+            }
+
             if(status >= 400) {
-                handler.trigger('error', data ? data : {
+                handler.emitter.trigger('error', data ? data : {
                     code: status
                 });
             }
             else {
-                handler.trigger('success', data);
+                handler.emitter.trigger('success', data);
             }
-
-            handler.trigger('success', data);
         };
 
         params.onerror = function(e) {
-            handler.trigger('error', e);
+            handler.emitter.trigger('error', e);
         };
 
         if(DEBUG){
