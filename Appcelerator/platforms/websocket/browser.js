@@ -52,40 +52,6 @@ limitations under the License.
         return o;
     };
 
-    var needConnection = function() {
-
-        if(client) {
-
-            d("WS state " + client.readyState);
-            switch(client.readyState) {
-                case 0:
-
-                    d("[ws client] WS is connecting");
-                    setTimeout(function() {
-                        wslib.connect(handler, connectionSuccess, connectionFail);
-                    }, 100);
-
-                    return false;
-
-                    break;
-                case 1:
-
-                    d("[ws client] WS is already connected");
-                    return false;
-
-                    break;
-                case 2:
-                case 3:
-
-                    d("[ws client] WS is closed or closing");
-                    client = null;
-
-                    break;
-            }
-        }
-
-        return true;
-    };
 
     var wslib = {};
     wslib.initialize = function(compose) {
@@ -116,8 +82,48 @@ limitations under the License.
             // 2 closing
             // 3 closed
 
+            var needConnection = function() {
 
-            if (needConnection()) {
+                if(client) {
+
+                    d("WS state " + client.readyState);
+                    switch(client.readyState) {
+                        case 0:
+
+                            d("[ws client] WS is connecting");
+                            setTimeout(function() {
+                                wslib.connect(handler, connectionSuccess, connectionFail);
+                            }, 100);
+
+                            return null;
+
+                            break;
+                        case 1:
+
+                            d("[ws client] WS is already connected");
+                            return false;
+
+                            break;
+                        case 2:
+                        case 3:
+
+                            d("[ws client] WS is closed or closing");
+                            client = null;
+
+                            break;
+                    }
+                }
+
+                return true;
+            };
+
+            var needConn = needConnection();
+
+            if(needConn === null) {
+                return;
+            }
+
+            if (needConn) {
 
                 d("[ws client] Connecting to ws server " +
                         wsConf.proto +'://'+ wsConf.host + ':' + wsConf.port + '/' + compose.config.apiKey);

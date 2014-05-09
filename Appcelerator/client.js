@@ -200,12 +200,11 @@ limitations under the License.
          * */
         var QueueManager = function() {
 
-            var me= this;
-
+            var me = this;
             var __receiver = null;
-            // 15 seconds
-            var __timeout = 5000;
 
+            // 5 seconds
+            var __timeout = 3600000;
 
             // queue[ uuid ] = { created: xxx, callback: xxx }
             var queue = {};
@@ -244,9 +243,11 @@ limitations under the License.
                         }
 
                         for(var i in queue) {
+//                            console.log( queue[i].created + me.timeout(), (new Date).getTime() );
+//                            console.log( (queue[i].created + me.timeout()) < (new Date).getTime() );
                             if(!queue[i].keep && (queue[i].created + me.timeout()) < (new Date).getTime()) {
                                 d("[queue manager] Pruning " + i);
-                                queue[i].handler.emitter.trigger('error', { code: 408 });
+                                queue[i].handler.emitter.trigger('error', { message: 'Queue timeout', code: 408 });
                                 if(queueSize > 0) {
                                     queueSize--;
                                 }
@@ -254,15 +255,13 @@ limitations under the License.
                             }
                         }
 
-                    }, 250);
-
+                    }, 100);
                 }
 
                 return timer;
             };
 
             this.guid = guid;
-
 
             this.add = function(obj) {
 

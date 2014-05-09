@@ -70,10 +70,10 @@ adapter.initialize = function(compose) {
 
                         d("[ws client] WS is connecting");
                         setTimeout(function() {
-                            wslib.connect(handler, connectionSuccess, connectionFail);
+                            adapter.connect(handler, connectionSuccess, connectionFail);
                         }, 100);
 
-                        return false;
+                        return null;
 
                         break;
                     case client.OPEN:
@@ -96,7 +96,14 @@ adapter.initialize = function(compose) {
         };
 
         // initialize the client, but only if not connected or reconnecting
-        if (needConnection()) {
+        var needConn = needConnection();
+
+        if(needConn === null) { // connecting, wait
+            return;
+        }
+
+        if (needConn) {
+
 
             d("[ws client] Connecting to ws server " +
                     wsConf.proto +'://'+ wsConf.host + ':' + wsConf.port + '/' + compose.config.apiKey);

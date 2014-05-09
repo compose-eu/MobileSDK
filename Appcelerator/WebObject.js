@@ -312,7 +312,7 @@ limitations under the License.
                     var currVal = this.getCurrentValue();
                     currVal.channels[name] = currVal.channels[name] || { 'current-value': null };
                     currVal.channels[name]['current-value'] = value;
-                    currVal.lastUpdate = value.lastUpdate || this.__$lastUpdate;
+                    currVal.lastUpdate = this.__$lastUpdate;
                 }
             }
             return this;

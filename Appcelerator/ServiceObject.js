@@ -428,6 +428,9 @@ limitations under the License.
             if(data) {
 
                 var channels = data.channels;
+
+                if(!channels) return null;
+
                 if(channel && typeof channels[channel] !== 'undefined') {
                     return channels[channel]['current-value'];
                 }
@@ -1186,7 +1189,7 @@ limitations under the License.
          */
 
     //    ServiceObject.prototype.toString = compose.WebObject.prototype.toString;
-
+        solib.DataBag = DataBag;
         solib.ServiceObject = ServiceObject;
         solib.create = function(wo) {
 

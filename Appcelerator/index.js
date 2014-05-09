@@ -53,7 +53,7 @@ limitations under the License.
         if(typeof m === "string") {
             this.message = m;
         }
-        
+
         if(m instanceof Error) {
             this.message = m.message;
             this.stack = m.stack;
@@ -342,6 +342,7 @@ limitations under the License.
         }
 
         compose.lib.Client = compose.util.setupModule("client");
+        compose.util.queueManager = compose.lib.Client.queueManager;
 
         // initialize & expose WebObject module
         compose.lib.WebObject = compose.util.setupModule("WebObject");
@@ -350,6 +351,7 @@ limitations under the License.
 
         // initialize & expose ServiceObject module
         compose.lib.ServiceObject = compose.util.setupModule("ServiceObject");
+        compose.util.DataBag = compose.lib.ServiceObject.DataBag;
         compose.ServiceObject = compose.lib.ServiceObject.ServiceObject;
 
         compose.load = compose.lib.ServiceObject.load;
