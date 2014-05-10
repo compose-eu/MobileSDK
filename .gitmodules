@@ -1,0 +1,3 @@
+[submodule "Appcelerator"]
+	path = Appcelerator
+	url = https://github.com/compose-eu/Appcelerator
