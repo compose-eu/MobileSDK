@@ -1,39 +1,35 @@
-// This is a test harness for your module
-// You should do something interesting in this harness 
-// to test out the module and to provide instructions 
-// to users on how to use it by example.
+var mqtt = require("it.uhopper.mqtt");  
 
-
-// open a single window
-var win = Ti.UI.createWindow({
-	backgroundColor:'white'
-});
-var label = Ti.UI.createLabel();
-win.add(label);
-win.open();
-
-// TODO: write your module tests here
-var mqtt = require('it.uhopper.mqtt');
-Ti.API.info("module is => " + mqtt);
-
-label.text = mqtt.example();
-
-Ti.API.info("module exampleProp is => " + mqtt.exampleProp);
-mqtt.exampleProp = "This is a test value";
-
-if (Ti.Platform.name == "android") {
-	var proxy = mqtt.createExample({
-		message: "Creating an example Proxy",
-		backgroundColor: "red",
-		width: 100,
-		height: 100,
-		top: 100,
-		left: 150
+	//registration for opening the mqtt channel
+	//this is the first thing that should happen automatically as soon as app starts
+	
+	mqtt.registerCallback(Alloy.Globals.API_KEY, {
+		success: function(data){
+			Ti.API.info("Success : " + JSON.stringify(data));
+		},
+		error: function(data){
+			Ti.API.info("Error : " + JSON.stringify(data)); 
+		},
+		callback: function(data){
+			Ti.API.info("notification " + JSON.stringify(d));
+			$.label.text = JSON.stringify(data, null, 2);	
+		}
 	});
-
-	proxy.printMessage("Hello world!");
-	proxy.message = "Hi world!.  It's me again.";
-	proxy.printMessage("Hello world!");
-	win.add(proxy);
-}
-
+	
+	
+	var meta_data = {
+   			"meta": {
+    			 "authorization": "API_TOKEN HERE",
+     			"method": "PUT/GET/POST",
+     			"url": "/full/path/to/destination"
+   			},
+   			"body": {
+    			 <STRUCTURE OF THE JSON DOCUMENT YOU SHOULD SEND TO THE REST API>
+   			}
+		}
+	//publish data into compose
+	mqtt.publishData(Alloy.Globals.API_KEY, JSON.stringify(meta_data);	
+	
+	
+	
+$.index.open()
