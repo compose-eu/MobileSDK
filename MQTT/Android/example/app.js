@@ -1,27 +1,4 @@
-#Titanium Tutorial Compose
-
-
-##1. Get the Library
-
-Download mqtt titanium module and put it under your titanium folder
-    
-    Titanium/modules/android/ 
-
-
-##2. Add the module
-
-On your titanium project in __tiapp.xml__ add the following lines
-
-    <modules>
-             <module platform="android">it.uhopper.mqtt</module>
-    </modules>
-    
-    
-##3. How to use it
-
-In index.js 
-
-	var mqtt = require("it.uhopper.mqtt");  
+var mqtt = require("it.uhopper.mqtt");  
 
 	//registration for opening the mqtt channel
 	//this is the first thing that should happen automatically as soon as app starts
@@ -33,8 +10,9 @@ In index.js
 		error: function(data){
 			Ti.API.info("Error : " + JSON.stringify(data)); 
 		},
-		callback: function(d){
+		callback: function(data){
 			Ti.API.info("notification " + JSON.stringify(d));
+			$.label.text = JSON.stringify(data, null, 2);	
 		}
 	});
 	
@@ -50,16 +28,8 @@ In index.js
    			}
 		}
 	//publish data into compose
-	mqtt.publishData(Alloy.Globals.API_KEY, JSON.stringify(meta_data);		
+	mqtt.publishData(Alloy.Globals.API_KEY, JSON.stringify(meta_data);	
 	
 	
 	
-	//close mqtt connection
-	mqtt.unregisterForNotification({
-		success: function(data){},
-		error: function(data){}
-	})
-	
-	
-	
-		
+$.index.open()

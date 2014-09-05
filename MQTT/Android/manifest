@@ -1,0 +1,18 @@
+#
+# this is your module manifest and used by Titanium
+# during compilation, packaging, distribution, etc.
+#
+version: 0.1
+apiversion: 2
+description: My module
+author: linnal
+license: Specify your license
+copyright: Copyright (c) 2014 by Your Company
+
+
+# these should not be edited
+name: mqtt
+moduleid: it.uhopper.mqtt
+guid: 670a8c18-abe4-4d6f-a36d-83f135f76b42
+platform: android
+minsdk: 3.2.0.GA
